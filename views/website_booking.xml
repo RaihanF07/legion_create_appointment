@@ -1,0 +1,70 @@
+<odoo>
+    <!-- Halaman Form Booking -->
+    <template id="online_booking_form" name="Booking Lapangan">
+        <t t-call="website.layout">
+            <div class="container mt-5 mb-5">
+                <div class="row justify-content-center">
+                    <div class="col-md-6 shadow p-5 bg-white rounded">
+                        <h2 class="text-center mb-4" style="color: #000;">Booking Lapangan Talvora</h2>
+                        <form action="/booking/submit" method="post">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            
+                            <div class="mb-3">
+                                <label class="fw-bold">Nama Lengkap</label>
+                                <input type="text" name="name" class="form-control" placeholder="Cth: Budi Santoso" required="1"/>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold">Email</label>
+                                <input type="email" name="email" class="form-control" placeholder="Cth: budi@email.com" required="1"/>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold">No. WhatsApp</label>
+                                <input type="text" name="phone" class="form-control" placeholder="Cth: 08123456789" required="1"/>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="fw-bold">Tanggal Main</label>
+                                    <input type="date" name="date" class="form-control" required="1"/>
+                                </div>
+                                <div class="col-md-4 mt-3 mt-md-0">
+                                    <label class="fw-bold">Jam Mulai</label>
+                                    <input type="time" name="appointment_time" class="form-control" required="1"/>
+                                </div>
+                                <div class="col-md-4 mt-3 mt-md-0">
+                                    <label class="fw-bold">Durasi</label>
+                                    <select name="duration" class="form-control" required="1">
+                                        <option value="1">1 Jam</option>
+                                        <option value="2">2 Jam</option>
+                                        <option value="3">3 Jam</option>
+                                        <option value="4">4 Jam</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="fw-bold">Pilihan Lapangan</label>
+                                <select name="court_id" class="form-control" required="1">
+                                    <option value="">-- Pilih Lapangan --</option>
+                                    <t t-foreach="courts" t-as="court">
+                                        <option t-att-value="court.id"><t t-esc="court.name"/></option>
+                                    </t>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-lg w-100" style="background-color: #d4af37; color: #000; font-weight: bold;">Konfirmasi Booking</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Halaman Sukses -->
+    <template id="booking_success" name="Booking Berhasil">
+        <t t-call="website.layout">
+            <div class="container text-center mt-5 mb-5 py-5 shadow bg-white rounded">
+                <h1 style="color: #d4af37;">Booking Berhasil Diterima! 🏆</h1>
+                <p class="lead mt-3">Terima kasih. Jadwal lapangan Anda telah masuk ke sistem kami. <br/>Staf kami akan segera memproses tagihan Anda.</p>
+                <a href="/" class="btn mt-3" style="background-color: #000; color: #d4af37; font-weight: bold;">Kembali ke Beranda</a>
+            </div>
+        </t>
+    </template>
+</odoo>
