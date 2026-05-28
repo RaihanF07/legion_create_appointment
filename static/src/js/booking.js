@@ -1,35 +1,39 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const dateInput = document.getElementById('booking_date');
-    const timeInput = document.getElementById('booking_time');
-    const container = document.getElementById('availability_container');
+/** @odoo-module **/
 
-    if (!dateInput || !timeInput || !container) return;
+import publicWidget from "@web/legacy/js/public/public_widget";
 
-    // Mengubah string jam "14:30" menjadi desimal 14.5 untuk dihitung
-    function timeToFloat(timeStr) {
-        if (!timeStr) return 0;
-        const parts = timeStr.split(':');
-        return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
-    }
+publicWidget.registry.BookingLapangan = publicWidget.Widget.extend({
+    // Selector ini akan mencari form booking milikmu di XML
+    selector: 'form[action="/booking/submit"]',
+    
+    // Odoo secara otomatis akan memantau event change pada input ini
+    events: {
+        'change #booking_date': '_onDateChange',
+        'change #booking_time': '_onTimeChange',
+    },
 
-    // Mengubah desimal 14.5 menjadi string jam "14:30" untuk ditampilkan
-    function formatTime(floatTime) {
-        const h = Math.floor(floatTime);
-        const m = Math.round((floatTime - h) * 60);
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-    }
+    /**
+     * Start dipanggil saat elemen berhasil ditemukan oleh Odoo
+     */
+    start: function () {
+        this.container = this.$el.find('#availability_container');
+        this.alertBox = this.$el.find('#booking_alert');
+        this.courtSelect = this.$el.find('#court_id_select');
+        this.currentCourtsData = [];
+        
+        console.log("Widget Booking Lapangan Berhasil Dimuat!");
+        return this._super.apply(this, arguments);
+    },
 
-    // Fungsi memanggil API di backend Python
-    async function fetchAvailability() {
-        const dateVal = dateInput.value;
-        const timeVal = timeInput.value;
-
+    _onDateChange: async function (ev) {
+        const dateVal = ev.currentTarget.value;
         if (!dateVal) {
-            container.innerHTML = '';
+            this.container.empty();
             return;
         }
 
         try {
+            // Odoo 18 mendukung fetch standar, struktur payload JSON-RPC mu sudah benar
             const response = await fetch('/booking/check_availability', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -42,34 +46,55 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await response.json();
             if (result.result && result.result.status === 'success') {
-                renderCards(result.result.data, timeVal);
+                this.currentCourtsData = result.result.data;
+                this._updateUI();
             }
         } catch (error) {
             console.error("Gagal menarik data jadwal:", error);
         }
-    }
+    },
 
-    // Fungsi menggambar Card di layar HTML
-    function renderCards(courtsData, timeVal) {
-        container.innerHTML = ''; 
-        let selectedTime = timeVal ? timeToFloat(timeVal) : null;
+    _onTimeChange: function () {
+        this._updateUI();
+    },
 
-        courtsData.forEach(court => {
-            let maxDuration = 4; // Aturan bisnis: Maksimal 4 jam
+    _timeToFloat: function (timeStr) {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+    },
+
+    _formatTime: function (floatTime) {
+        const h = Math.floor(floatTime);
+        const m = Math.round((floatTime - h) * 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    },
+
+    _updateUI: function () {
+        const timeVal = this.$el.find('#booking_time').val();
+        let selectedTime = timeVal ? this._timeToFloat(timeVal) : null;
+        
+        this.container.empty(); 
+        this.alertBox.addClass('d-none');
+        this.courtSelect.html('<option value="">-- Pilih Lapangan --</option>');
+
+        let availableCourtsCount = 0;
+
+        this.currentCourtsData.forEach(court => {
+            let maxDuration = 4;
             let isAvailable = true;
             let conflictMsg = "";
 
             if (selectedTime !== null) {
-                // Hitung celah waktu kosong (Opsi B)
                 for (let slot of court.slots) {
-                    // Jika jam mulai berada di dalam waktu booking orang lain
+                    // Cek jika jam mulai berada di dalam waktu booking orang lain
                     if (selectedTime >= slot.start && selectedTime < slot.end) {
                         isAvailable = false;
-                        conflictMsg = `Sedang dipakai: ${formatTime(slot.start)} - ${formatTime(slot.end)}`;
+                        conflictMsg = `Sedang dipakai: ${this._formatTime(slot.start)} - ${this._formatTime(slot.end)}`;
                         maxDuration = 0;
                         break;
                     }
-                    // Jika jam mulai sebelum jadwal orang, hitung sisa waktunya
+                    // Cek jarak dengan jadwal berikutnya untuk sisa waktu
                     if (selectedTime < slot.start) {
                         let diff = slot.start - selectedTime;
                         if (diff < maxDuration) {
@@ -79,22 +104,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // Tampilan daftar jam terisi
+            // Atur Label Status di HTML
             let slotsHtml = court.slots.length > 0 
-                ? court.slots.map(s => `<span class="badge bg-secondary me-1 mb-1" style="font-size:0.85rem;">${formatTime(s.start)} - ${formatTime(s.end)}</span>`).join('')
+                ? court.slots.map(s => `<span class="badge bg-secondary me-1 mb-1" style="font-size:0.85rem;">${this._formatTime(s.start)} - ${this._formatTime(s.end)}</span>`).join('')
                 : '<span class="badge bg-success" style="font-size:0.85rem;">Kosong Seharian</span>';
 
-            // Teks Status
             let statusHtml = '';
             if (selectedTime === null) {
                 statusHtml = '<span class="text-muted">Isi Jam Mulai untuk cek ketersediaan</span>';
             } else if (isAvailable && maxDuration > 0) {
-                statusHtml = `<span class="text-success fw-bold">Tersedia (Sisa Maksimal ${maxDuration} Jam)</span>`;
+                statusHtml = `<span class="text-success fw-bold">Tersedia (Sisa Maks. ${maxDuration} Jam)</span>`;
+                availableCourtsCount++;
+                
+                // Masukkan ke Select Option
+                this.courtSelect.append(`<option value="${court.id}">${court.name} (Sisa Maks ${maxDuration} Jam)</option>`);
             } else {
                 statusHtml = `<span class="text-danger fw-bold">Penuh / Bentrok</span>`;
             }
 
-            // Gabungkan menjadi struktur HTML
             const cardHtml = `
                 <div class="col-md-6 mb-3">
                     <div class="card shadow-sm h-100 ${isAvailable && selectedTime !== null && maxDuration > 0 ? 'border-success border-2' : (selectedTime !== null ? 'border-danger border-2' : '')}">
@@ -103,17 +130,19 @@ document.addEventListener('DOMContentLoaded', function () {
                             <p class="card-text mb-2">${statusHtml}</p>
                             ${conflictMsg ? `<p class="text-danger mb-2" style="font-size:0.9rem;">${conflictMsg}</p>` : ''}
                             <hr class="my-2">
-                            <p class="text-muted mb-1" style="font-size:0.85rem;">Jadwal yang sudah di-booking orang lain:</p>
+                            <p class="text-muted mb-1" style="font-size:0.85rem;">Jadwal yang sudah terisi:</p>
                             <div>${slotsHtml}</div>
                         </div>
                     </div>
                 </div>
             `;
-            container.innerHTML += cardHtml;
+            this.container.append(cardHtml);
         });
-    }
 
-    // Trigger agar JS jalan otomatis tiap Tanggal/Jam diubah
-    dateInput.addEventListener('change', fetchAvailability);
-    timeInput.addEventListener('change', fetchAvailability);
+        // Tampilkan Error Alert jika jam tersebut semua lapangan sudah penuh
+        if (selectedTime !== null && availableCourtsCount === 0) {
+            this.alertBox.html('<strong>Maaf!</strong> Semua lapangan penuh pada jam tersebut. Silakan geser jam Anda.');
+            this.alertBox.removeClass('d-none');
+        }
+    }
 });
