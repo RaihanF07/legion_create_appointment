@@ -1,11 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Halaman Form Booking -->
     <template id="online_booking_form" name="Booking Lapangan">
         <t t-call="website.layout">
             <div class="container mt-5 mb-5">
                 <div class="row justify-content-center">
                     <div class="col-lg-8 shadow p-5 bg-white rounded">
                         <h2 class="text-center mb-4" style="color: #000;">Booking Lapangan Talvora</h2>
+                        
+                        <div id="booking_alert" class="alert alert-danger d-none mb-4" role="alert"></div>
+                        
                         <form action="/booking/submit" method="post">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                             
@@ -28,8 +31,9 @@
                                     <input type="date" name="date" id="booking_date" class="form-control" required="1"/>
                                 </div>
                                 <div class="col-md-4 mt-3 mt-md-0">
-                                    <label class="fw-bold">Jam Mulai</label>
-                                    <input type="time" name="appointment_time" id="booking_time" class="form-control" required="1"/>
+                                    <label class="fw-bold">Jam Mulai (08:00 - 22:00)</label>
+                                    <!-- TAMBAHAN: min="08:00" dan max="22:00" untuk validasi HTML dasar -->
+                                    <input type="time" name="appointment_time" id="booking_time" class="form-control" min="08:00" max="22:00" required="1"/>
                                 </div>
                                 <div class="col-md-4 mt-3 mt-md-0">
                                     <label class="fw-bold">Durasi</label>
@@ -42,19 +46,15 @@
                                 </div>
                             </div>
 
-                            <!-- WADAH CARD KETERSEDIAAN MUNCUL DI SINI SECARA OTOMATIS -->
                             <div id="availability_container" class="row mb-3"></div>
                             
                             <div class="mb-4">
-                                <label class="fw-bold">Pilih Lapangan (Yang Berwarna Hijau)</label>
-                                <select name="court_id" class="form-control" required="1">
-                                    <option value="">-- Pilih Lapangan --</option>
-                                    <t t-foreach="courts" t-as="court">
-                                        <option t-att-value="court.id"><t t-esc="court.name"/></option>
-                                    </t>
+                                <label class="fw-bold">Pilih Lapangan</label>
+                                <select name="court_id" id="court_id_select" class="form-control" required="1">
+                                    <option value="">-- Isi Tanggal &amp; Jam Dahulu --</option>
                                 </select>
                             </div>
-                            <button type="submit" class="btn btn-lg w-100" style="background-color: #d4af37; color: #000; font-weight: bold;">Konfirmasi Booking</button>
+                            <button type="submit" id="btn_submit_booking" class="btn btn-lg w-100" style="background-color: #d4af37; color: #000; font-weight: bold;">Konfirmasi Booking</button>
                         </form>
                     </div>
                 </div>
@@ -62,13 +62,23 @@
         </t>
     </template>
 
-    <!-- Halaman Sukses -->
     <template id="booking_success" name="Booking Berhasil">
         <t t-call="website.layout">
             <div class="container text-center mt-5 mb-5 py-5 shadow bg-white rounded">
-                <h1 style="color: #d4af37;">Booking Berhasil Diterima! 🏆</h1>
-                <p class="lead mt-3">Terima kasih. Jadwal lapangan Anda telah masuk ke sistem kami. <br/>Staf kami akan segera memproses tagihan Anda.</p>
-                <a href="/" class="btn mt-3" style="background-color: #000; color: #d4af37; font-weight: bold;">Kembali ke Beranda</a>
+                <t t-if="error">
+                    <h1 class="text-danger">Oops, Pemesanan Gagal!</h1>
+                    <p class="lead mt-3 text-danger"><t t-esc="error"/></p>
+                    <a href="/booking" class="btn mt-3 btn-danger">Coba Jadwal Lain</a>
+                </t>
+                <t t-else="">
+                    <h1 style="color: #d4af37;">Booking Berhasil Diterima!</h1>
+                    <p class="lead mt-3">Terima kasih. Jadwal lapangan Anda telah diamankan.</p>
+                    <div class="alert alert-success d-inline-block mt-3 px-4 py-3">
+                        <h4 class="mb-0">Nomor Sales Order: <strong><t t-esc="so_name"/></strong></h4>
+                    </div>
+                    <br/>
+                    <a href="/" class="btn mt-4" style="background-color: #000; color: #d4af37; font-weight: bold;">Kembali ke Beranda</a>
+                </t>
             </div>
         </t>
     </template>
