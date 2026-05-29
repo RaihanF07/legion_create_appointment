@@ -4,7 +4,11 @@ from odoo.http import request
 class BookingController(http.Controller):
     @http.route('/booking', type='http', auth='public', website=True)
     def booking_form(self, **kw):
-        courts = request.env['product.product'].sudo().search([('type', '=', 'service')])
+        courts = request.env['product.product'].sudo().search([
+            ('type', '=', 'service'),
+            ('name', 'not ilike', 'sewa lapangan padel 2'),
+            ('name', '!=', 'Standard Delivery')
+        ])
         return request.render('legion_create_appointment.online_booking_form', {
             'courts': courts,
         })
@@ -30,15 +34,20 @@ class BookingController(http.Controller):
         duration = int(post.get('duration', 1))
         court_id = int(post.get('court_id')) if post.get('court_id') else False
         date = post.get('date')
+        
+        end_time = float_time + duration
+
+        if float_time < 8.0 or end_time > 22.0:
+            return request.render('legion_create_appointment.booking_success', {
+                'error': 'Maaf, lapangan hanya beroperasi pada pukul 08:00 hingga 22:00. Pastikan jam mulai dan durasi Anda berada dalam rentang waktu tersebut.'
+            })
 
         # 3. Validasi Backend (Mencegah Bentrok Jadwal)
-        end_time = float_time + duration
         existing_bookings = request.env['salon.appointment'].sudo().search([('date', '=', date), ('services', '=', court_id)])
         
         for b in existing_bookings:
             b_start = b.appointment_time
             b_end = b.appointment_time + b.duration
-            # Rumus iris jadwal (overlap)
             if max(float_time, b_start) < min(end_time, b_end):
                 return request.render('legion_create_appointment.booking_success', {
                     'error': 'Maaf, jadwal pada jam tersebut menabrak booking orang lain. Silakan pilih jam atau durasi yang lebih aman.'
@@ -65,7 +74,10 @@ class BookingController(http.Controller):
         }
         new_so = request.env['sale.order'].sudo().create(so_vals)
         
-        # 6. Lemparkan Nomor SO ke Layar Sukses
+        # 6. PERBAIKAN: Konfirmasi otomatis Quotation -> Sales Order
+        new_so.sudo().action_confirm()
+        
+        # Lemparkan Nomor SO ke Layar Sukses
         return request.render('legion_create_appointment.booking_success', {
             'error': False,
             'so_name': new_so.name
@@ -76,7 +88,11 @@ class BookingController(http.Controller):
         if not date:
             return {'status': 'error', 'message': 'Tanggal kosong'}
 
-        courts = request.env['product.product'].sudo().search([('type', '=', 'service')])
+        courts = request.env['product.product'].sudo().search([
+            ('type', '=', 'service'),
+            ('name', 'not ilike', 'sewa lapangan padel 2'),
+            ('name', '!=', 'Standard Delivery')
+        ])
         bookings = request.env['salon.appointment'].sudo().search([('date', '=', date)])
 
         booked_data = {}

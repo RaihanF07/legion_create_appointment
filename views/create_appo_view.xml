@@ -43,10 +43,6 @@
                             confirm="Are you sure that you need to cancel?"
                             type="object"
                             invisible="state not in ('draft', 'done', 'confirm')"/>
-
-                    <button name="create_invoice_appointment" string="Buat Sales Order" class="oe_highlight"
-                            type="object"/>
-
                     <field name="state" widget="statusbar" statusbar_visible="draft,done,confirm"/>
                 </header>
 

@@ -1,31 +1,39 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const dateInput = document.getElementById('booking_date');
-    const timeInput = document.getElementById('booking_time');
-    const durationInput = document.getElementById('booking_duration');
-    const courtSelect = document.getElementById('court_id_select');
-    const container = document.getElementById('availability_container');
-    const alertBox = document.getElementById('booking_alert');
+/** @odoo-module **/
 
-    if (!dateInput || !timeInput || !container) return;
+import publicWidget from "@web/legacy/js/public/public_widget";
 
-    function timeToFloat(timeStr) {
-        if (!timeStr) return 0;
-        const parts = timeStr.split(':');
-        return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
-    }
+publicWidget.registry.BookingLapangan = publicWidget.Widget.extend({
+    selector: 'form[action="/booking/submit"]',
+    
+    events: {
+        'change #booking_date': '_onDateChange',
+        'change #booking_time': '_onTimeChange',
+        'change #booking_duration': '_onDurationChange',
+        'submit': '_onSubmit', // TAMBAHAN: Deteksi saat form dikirim
+    },
 
-    function formatTime(floatTime) {
-        const h = Math.floor(floatTime);
-        const m = Math.round((floatTime - h) * 60);
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-    }
+    start: function () {
+        this.container = this.$el.find('#availability_container');
+        this.alertBox = this.$el.find('#booking_alert');
+        this.courtSelect = this.$el.find('#court_id_select');
+        this.btnSubmit = this.$el.find('#btn_submit_booking');
+        this.currentCourtsData = [];
+        
+        console.log("Widget Booking Lapangan (Odoo 18) Dimuat!");
+        return this._super.apply(this, arguments);
+    },
 
-    let currentCourtsData = [];
+    // PERBAIKAN: Mencegah Double Submit
+    _onSubmit: function (ev) {
+        // Matikan tombol agar tidak bisa di klik 2 kali dan beri tahu bahwa sedang proses
+        this.btnSubmit.prop('disabled', true);
+        this.btnSubmit.html('<i class="fa fa-spinner fa-spin"></i> Memproses...');
+    },
 
-    async function fetchAvailability() {
-        const dateVal = dateInput.value;
+    _onDateChange: async function (ev) {
+        const dateVal = ev.currentTarget.value;
         if (!dateVal) {
-            container.innerHTML = '';
+            this.container.empty();
             return;
         }
 
@@ -42,39 +50,75 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await response.json();
             if (result.result && result.result.status === 'success') {
-                currentCourtsData = result.result.data;
-                updateUI();
+                this.currentCourtsData = result.result.data.filter(court => {
+                    let name = court.name.toLowerCase();
+                    return name !== 'sewa lapangan padel 2' && name !== 'standard delivery';
+                });
+                this._updateUI();
             }
         } catch (error) {
             console.error("Gagal menarik data jadwal:", error);
         }
-    }
+    },
 
-    function updateUI() {
-        const timeVal = timeInput.value;
-        let selectedTime = timeVal ? timeToFloat(timeVal) : null;
+    _onTimeChange: function () {
+        this._updateUI();
+    },
+
+    _onDurationChange: function () {
+        this._updateUI();
+    },
+
+    _timeToFloat: function (timeStr) {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+    },
+
+    _formatTime: function (floatTime) {
+        const h = Math.floor(floatTime);
+        const m = Math.round((floatTime - h) * 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    },
+
+    _updateUI: function () {
+        const timeVal = this.$el.find('#booking_time').val();
+        let selectedTime = timeVal ? this._timeToFloat(timeVal) : null;
+        let duration = parseInt(this.$el.find('#booking_duration').val() || 1);
         
-        container.innerHTML = ''; 
-        if (alertBox) alertBox.classList.add('d-none');
-        if (courtSelect) courtSelect.innerHTML = '<option value="">-- Pilih Lapangan --</option>';
+        this.container.empty(); 
+        this.alertBox.addClass('d-none');
+        this.courtSelect.html('<option value="">-- Pilih Lapangan --</option>');
+        this.btnSubmit.prop('disabled', false);
+
+        if (selectedTime !== null) {
+            let endTime = selectedTime + duration;
+            if (selectedTime < 8.0 || endTime > 22.0) {
+                this.alertBox.html('<strong>Jam di luar operasional!</strong> Lapangan hanya buka dari jam 08:00 hingga 22:00. Silakan kurangi durasi atau majukan jam main.');
+                this.alertBox.removeClass('d-none');
+                this.btnSubmit.prop('disabled', true);
+            }
+        }
 
         let availableCourtsCount = 0;
 
-        currentCourtsData.forEach(court => {
+        this.currentCourtsData.forEach(court => {
             let maxDuration = 4;
             let isAvailable = true;
             let conflictMsg = "";
 
             if (selectedTime !== null) {
+                let hoursUntilClose = 22.0 - selectedTime;
+                maxDuration = Math.floor(Math.min(maxDuration, hoursUntilClose));
+                if (maxDuration < 0) maxDuration = 0;
+
                 for (let slot of court.slots) {
-                    // Cek jika jam mulai berada di dalam waktu booking orang lain
                     if (selectedTime >= slot.start && selectedTime < slot.end) {
                         isAvailable = false;
-                        conflictMsg = `Sedang dipakai: ${formatTime(slot.start)} - ${formatTime(slot.end)}`;
+                        conflictMsg = `Sedang dipakai: ${this._formatTime(slot.start)} - ${this._formatTime(slot.end)}`;
                         maxDuration = 0;
                         break;
                     }
-                    // Cek jarak dengan jadwal berikutnya untuk sisa waktu
                     if (selectedTime < slot.start) {
                         let diff = slot.start - selectedTime;
                         if (diff < maxDuration) {
@@ -84,32 +128,40 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // Atur Label Status di HTML
             let slotsHtml = court.slots.length > 0 
-                ? court.slots.map(s => `<span class="badge bg-secondary me-1 mb-1" style="font-size:0.85rem;">${formatTime(s.start)} - ${formatTime(s.end)}</span>`).join('')
+                ? court.slots.map(s => `<span class="badge bg-secondary me-1 mb-1" style="font-size:0.85rem;">${this._formatTime(s.start)} - ${this._formatTime(s.end)}</span>`).join('')
                 : '<span class="badge bg-success" style="font-size:0.85rem;">Kosong Seharian</span>';
 
             let statusHtml = '';
+            let enoughDuration = maxDuration >= duration;
+            
+            let isWithinOperationalHours = true;
+            if (selectedTime !== null) {
+                 let endTime = selectedTime + duration;
+                 isWithinOperationalHours = (selectedTime >= 8.0 && endTime <= 22.0);
+            }
+
             if (selectedTime === null) {
                 statusHtml = '<span class="text-muted">Isi Jam Mulai untuk cek ketersediaan</span>';
-            } else if (isAvailable && maxDuration > 0) {
+            } else if (!isWithinOperationalHours) {
+                 statusHtml = `<span class="text-danger fw-bold">Tutup</span>`;
+            } else if (isAvailable && maxDuration > 0 && enoughDuration) {
                 statusHtml = `<span class="text-success fw-bold">Tersedia (Sisa Maks. ${maxDuration} Jam)</span>`;
                 availableCourtsCount++;
-                // Hanya suntikkan lapangan ke Dropdown JIKA tersedia
-                if(courtSelect) {
-                    courtSelect.innerHTML += `<option value="${court.id}">${court.name} (Sisa Maks ${maxDuration} Jam)</option>`;
-                }
+                this.courtSelect.append(`<option value="${court.id}">${court.name} (Sisa Maks ${maxDuration} Jam)</option>`);
+            } else if (isAvailable && !enoughDuration) {
+                statusHtml = `<span class="text-warning fw-bold">Waktu tidak cukup (${maxDuration} Jam)</span>`;
             } else {
                 statusHtml = `<span class="text-danger fw-bold">Penuh / Bentrok</span>`;
             }
 
             const cardHtml = `
                 <div class="col-md-6 mb-3">
-                    <div class="card shadow-sm h-100 ${isAvailable && selectedTime !== null && maxDuration > 0 ? 'border-success border-2' : (selectedTime !== null ? 'border-danger border-2' : '')}">
+                    <div class="card shadow-sm h-100 ${isAvailable && selectedTime !== null && enoughDuration && isWithinOperationalHours ? 'border-success border-2' : (selectedTime !== null ? 'border-danger border-2' : '')}">
                         <div class="card-body">
                             <h5 class="card-title fw-bold">${court.name}</h5>
                             <p class="card-text mb-2">${statusHtml}</p>
-                            ${conflictMsg ? `<p class="text-danger mb-2" style="font-size:0.9rem;">${conflictMsg}</p>` : ''}
+                            ${conflictMsg && isWithinOperationalHours ? `<p class="text-danger mb-2" style="font-size:0.9rem;">${conflictMsg}</p>` : ''}
                             <hr class="my-2">
                             <p class="text-muted mb-1" style="font-size:0.85rem;">Jadwal yang sudah terisi:</p>
                             <div>${slotsHtml}</div>
@@ -117,16 +169,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
             `;
-            container.innerHTML += cardHtml;
+            this.container.append(cardHtml);
         });
 
-        // Tampilkan Error Alert jika jam tersebut semua lapangan sudah penuh
-        if (selectedTime !== null && availableCourtsCount === 0 && alertBox) {
-            alertBox.innerHTML = '<strong>Maaf!</strong> Semua lapangan penuh pada jam tersebut. Silakan geser jam Anda.';
-            alertBox.classList.remove('d-none');
+        if (selectedTime !== null && availableCourtsCount === 0 && (selectedTime >= 8.0 && (selectedTime + duration) <= 22.0)) {
+            this.alertBox.html('<strong>Maaf!</strong> Tidak ada lapangan yang tersedia dengan durasi tersebut. Silakan geser jam Anda.');
+            this.alertBox.removeClass('d-none');
+            this.btnSubmit.prop('disabled', true);
         }
     }
-
-    dateInput.addEventListener('change', fetchAvailability);
-    timeInput.addEventListener('change', updateUI);
 });
