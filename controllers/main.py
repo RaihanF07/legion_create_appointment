@@ -4,11 +4,7 @@ from odoo.http import request
 class BookingController(http.Controller):
     @http.route('/booking', type='http', auth='public', website=True)
     def booking_form(self, **kw):
-        courts = request.env['product.product'].sudo().search([
-            ('type', '=', 'service'),
-            ('name', 'not ilike', 'sewa lapangan padel 2'),
-            ('name', '!=', 'Standard Delivery')
-        ])
+        courts = request.env['product.product'].sudo().search([('type', '=', 'service')])
         return request.render('legion_create_appointment.online_booking_form', {
             'courts': courts,
         })
@@ -34,15 +30,9 @@ class BookingController(http.Controller):
         duration = int(post.get('duration', 1))
         court_id = int(post.get('court_id')) if post.get('court_id') else False
         date = post.get('date')
-        
-        end_time = float_time + duration
-
-        if float_time < 8.0 or end_time > 22.0:
-            return request.render('legion_create_appointment.booking_success', {
-                'error': 'Maaf, lapangan hanya beroperasi pada pukul 08:00 hingga 22:00. Pastikan jam mulai dan durasi Anda berada dalam rentang waktu tersebut.'
-            })
 
         # 3. Validasi Backend (Mencegah Bentrok Jadwal)
+        end_time = float_time + duration
         existing_bookings = request.env['salon.appointment'].sudo().search([('date', '=', date), ('services', '=', court_id)])
         
         for b in existing_bookings:
@@ -61,12 +51,13 @@ class BookingController(http.Controller):
             'appointment_time': float_time,
             'duration': duration,
             'services': court_id,
+            'state': 'draft', # Pastikan state awalnya draft
         })
 
-        # 5. OTOMATIS BUAT SALES ORDER
+        # 5. BUAT SALES ORDER
         so_vals = {
             'partner_id': partner.id,
-            'origin': appointment.app_id if hasattr(appointment, 'app_id') else 'Website Booking',
+            'origin': str(appointment.id), # Kita simpan ID appointment di origin sebagai kunci penghubung
             'order_line': [(0, 0, {
                 'product_id': court_id,
                 'product_uom_qty': duration,
@@ -74,25 +65,25 @@ class BookingController(http.Controller):
         }
         new_so = request.env['sale.order'].sudo().create(so_vals)
         
-        # 6. PERBAIKAN: Konfirmasi otomatis Quotation -> Sales Order
-        new_so.sudo().action_confirm()
+        # 6. LANGSUNG KONFIRMASI SO & BUAT INVOICE
+        new_so.sudo().action_confirm() # Ubah Quotation jadi Sales Order
+        invoice = new_so.sudo()._create_invoices() # Buat Draft Invoice
+        invoice.sudo().action_post() # Posting Invoice agar bisa dibayar
         
-        # Lemparkan Nomor SO ke Layar Sukses
-        return request.render('legion_create_appointment.booking_success', {
-            'error': False,
-            'so_name': new_so.name
-        })
+        # 7. Update status Appointment menjadi confirmed karena SO sudah jalan
+        appointment.sudo().write({'state': 'confirm'})
+
+        # 8. LEMPAR KE PORTAL INVOICE (Bukan Quotation)
+        # Mengarahkan user ke halaman tagihan spesifik
+        portal_url = invoice.get_portal_url()
+        return request.redirect(portal_url)
 
     @http.route('/booking/check_availability', type='json', auth='public', website=True)
     def check_availability(self, date=None, **kw):
         if not date:
             return {'status': 'error', 'message': 'Tanggal kosong'}
 
-        courts = request.env['product.product'].sudo().search([
-            ('type', '=', 'service'),
-            ('name', 'not ilike', 'sewa lapangan padel 2'),
-            ('name', '!=', 'Standard Delivery')
-        ])
+        courts = request.env['product.product'].sudo().search([('type', '=', 'service')])
         bookings = request.env['salon.appointment'].sudo().search([('date', '=', date)])
 
         booked_data = {}
