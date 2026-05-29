@@ -9,6 +9,7 @@
         'data/data.xml',
         'views/create_appo_view.xml',
         'views/website_booking.xml',
+        'views/appointment_calendar.xml',
     ],
     'assets': {
         'web.assets_frontend': [

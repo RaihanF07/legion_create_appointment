@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tampilan Kalender Interaktif untuk Backend Admin -->
+    <record id="view_salon_appointment_calendar" model="ir.ui.view">
+        <field name="name">salon.appointment.calendar</field>
+        <field name="model">salon.appointment</field>
+        <field name="arch" type="xml">
+            <!-- 
+                date_start: Menggunakan field 'date' sebagai acuan tanggal main
+                color: Memberi warna berbeda-beda otomatis berdasarkan lapangan (services)
+                event_open_popup: Membuka detail info saat jadwal diklik
+            -->
+            <calendar string="Jadwal Lapangan" 
+                      date_start="date" 
+                      color="services" 
+                      mode="month" 
+                      quick_create="False" 
+                      event_open_popup="True">
+                <field name="customer" avatar_field="avatar_128"/>
+                <field name="services"/>
+                <!-- Menampilkan jam mulai dengan format waktu -->
+                <field name="appointment_time" widget="float_time"/>
+                <field name="duration"/>
+            </calendar>
+        </field>
+    </record>
+</odoo>
