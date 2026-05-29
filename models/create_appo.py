@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import tools, api, models, _, fields
+from datetime import datetime, timedelta
 from odoo.exceptions import UserError
 from odoo.tools import config
 from odoo.exceptions import ValidationError
@@ -52,6 +53,32 @@ class CreateAppointment(models.Model):
                 vals['app_id'] = self.env['ir.sequence'].next_by_code('salon.appointment') or _('New')
         res = super(CreateAppointment, self).create(vals)
         return res
+    
+    # Field baru khusus untuk merender Kalender Odoo
+    datetime_start = fields.Datetime(string="Mulai (Kalender)", compute='_compute_datetime', store=True)
+    datetime_end = fields.Datetime(string="Selesai (Kalender)", compute='_compute_datetime', store=True)
+
+    @api.depends('date', 'appointment_time', 'duration')
+    def _compute_datetime(self):
+        for record in self:
+            if record.date:
+                # 1. Pecah nilai desimal menjadi Jam dan Menit
+                hours = int(record.appointment_time)
+                minutes = int((record.appointment_time - hours) * 60)
+                
+                # 2. Gabungkan tanggal dan waktu
+                start_dt = datetime.combine(record.date, datetime.min.time()) + timedelta(hours=hours, minutes=minutes)
+                
+                # 3. Konversi ke standar UTC (Database Odoo menggunakan UTC)
+                # Karena kita di zona waktu WIB (UTC+7), kita kurangi 7 jam 
+                # agar saat tampil di browser kamu jamnya tetap akurat.
+                start_dt_utc = start_dt - timedelta(hours=7)
+                
+                record.datetime_start = start_dt_utc
+                record.datetime_end = start_dt_utc + timedelta(hours=record.duration)
+            else:
+                record.datetime_start = False
+                record.datetime_end = False
 
     def create_invoice_appointment(self): 
         self.ensure_one()
