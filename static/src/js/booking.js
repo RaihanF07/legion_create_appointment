@@ -9,7 +9,7 @@ publicWidget.registry.BookingLapangan = publicWidget.Widget.extend({
         'change #booking_date': '_onDateChange',
         'change #booking_time': '_onTimeChange',
         'change #booking_duration': '_onDurationChange',
-        'submit': '_onSubmit', // TAMBAHAN: Deteksi saat form dikirim
+        'submit': '_onSubmit', // Deteksi saat form dikirim
     },
 
     start: function () {
@@ -23,7 +23,7 @@ publicWidget.registry.BookingLapangan = publicWidget.Widget.extend({
         return this._super.apply(this, arguments);
     },
 
-    // PERBAIKAN: Mencegah Double Submit
+    // Mencegah Double Submit
     _onSubmit: function (ev) {
         // Matikan tombol agar tidak bisa di klik 2 kali dan beri tahu bahwa sedang proses
         this.btnSubmit.prop('disabled', true);

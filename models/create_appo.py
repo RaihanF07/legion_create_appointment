@@ -54,7 +54,7 @@ class CreateAppointment(models.Model):
         res = super(CreateAppointment, self).create(vals)
         return res
     
-    # Field baru khusus untuk merender Kalender Odoo
+    # untuk merender Kalender Odoo
     datetime_start = fields.Datetime(string="Mulai (Kalender)", compute='_compute_datetime', store=True)
     datetime_end = fields.Datetime(string="Selesai (Kalender)", compute='_compute_datetime', store=True)
 
@@ -62,16 +62,16 @@ class CreateAppointment(models.Model):
     def _compute_datetime(self):
         for record in self:
             if record.date:
-                # 1. Pecah nilai desimal menjadi Jam dan Menit
+                # Pecah nilai desimal menjadi Jam dan Menit
                 hours = int(record.appointment_time)
                 minutes = int((record.appointment_time - hours) * 60)
                 
-                # 2. Gabungkan tanggal dan waktu
+                # Gabungkan tanggal dan waktu
                 start_dt = datetime.combine(record.date, datetime.min.time()) + timedelta(hours=hours, minutes=minutes)
                 
-                # 3. Konversi ke standar UTC (Database Odoo menggunakan UTC)
-                # Karena kita di zona waktu WIB (UTC+7), kita kurangi 7 jam 
-                # agar saat tampil di browser kamu jamnya tetap akurat.
+                # Konversi ke standar UTC (Database Odoo menggunakan UTC)
+                # Karena di zona waktu WIB (UTC+7), kita kurangi 7 jam 
+                # agar saat tampil di browser jamnya tetap akurat.
                 start_dt_utc = start_dt - timedelta(hours=7)
                 
                 record.datetime_start = start_dt_utc
@@ -84,7 +84,7 @@ class CreateAppointment(models.Model):
         self.ensure_one()
         
         for record in self:
-            # 1. Siapkan data untuk Sales Order
+            # Siapkan data untuk Sales Order
             so_vals = {
                 'partner_id': record.customer.id,
                 'origin': record.app_id, 
@@ -94,10 +94,10 @@ class CreateAppointment(models.Model):
                 })],
             }
             
-            # 2. Buat eksekusi pembuatan SO di database
+            # Buat eksekusi pembuatan SO di database
             new_so = self.env['sale.order'].sudo().create(so_vals)
             
-            # 3. Arahkan layar otomatis membuka dokumen SO yang baru dibuat
+            # Arahkan layar otomatis membuka dokumen SO yang baru dibuat
             return {
                 'type': 'ir.actions.act_window',
                 'name': 'Sales Order',

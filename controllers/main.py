@@ -11,7 +11,7 @@ class BookingController(http.Controller):
 
     @http.route('/booking/submit', type='http', auth='public', website=True, methods=['POST'], csrf=True)
     def booking_submit(self, **post):
-        # 1. Cari / Buat Data Pelanggan
+        # Cari / Buat Data Pelanggan
         partner = request.env['res.partner'].sudo().search([('email', '=', post.get('email'))], limit=1)
         if not partner:
             partner = request.env['res.partner'].sudo().create({
@@ -20,7 +20,7 @@ class BookingController(http.Controller):
                 'phone': post.get('phone'),
             })
 
-        # 2. Konversi Jam ke Desimal
+        # Konversi Jam ke Desimal
         time_str = post.get('appointment_time')
         float_time = 0.0
         if time_str:
@@ -31,7 +31,7 @@ class BookingController(http.Controller):
         court_id = int(post.get('court_id')) if post.get('court_id') else False
         date = post.get('date')
 
-        # 3. Validasi Backend (Mencegah Bentrok Jadwal)
+        # Validasi Backend (Mencegah Bentrok Jadwal)
         end_time = float_time + duration
         existing_bookings = request.env['salon.appointment'].sudo().search([('date', '=', date), ('services', '=', court_id)])
         
@@ -43,7 +43,7 @@ class BookingController(http.Controller):
                     'error': 'Maaf, jadwal pada jam tersebut menabrak booking orang lain. Silakan pilih jam atau durasi yang lebih aman.'
                 })
 
-        # 4. Buat Appointment
+        # Buat Appointment
         appointment = request.env['salon.appointment'].sudo().create({
             'customer': partner.id,
             'contact': post.get('phone'),
@@ -54,7 +54,7 @@ class BookingController(http.Controller):
             'state': 'draft', # Pastikan state awalnya draft
         })
 
-        # 5. BUAT SALES ORDER
+        # BUAT SALES ORDER
         so_vals = {
             'partner_id': partner.id,
             'origin': str(appointment.id), # Kita simpan ID appointment di origin sebagai kunci penghubung
@@ -65,15 +65,15 @@ class BookingController(http.Controller):
         }
         new_so = request.env['sale.order'].sudo().create(so_vals)
         
-        # 6. LANGSUNG KONFIRMASI SO & BUAT INVOICE
+        # LANGSUNG KONFIRMASI SO & BUAT INVOICE
         new_so.sudo().action_confirm() # Ubah Quotation jadi Sales Order
         invoice = new_so.sudo()._create_invoices() # Buat Draft Invoice
         invoice.sudo().action_post() # Posting Invoice agar bisa dibayar
         
-        # 7. Update status Appointment menjadi confirmed karena SO sudah jalan
+        # Update status Appointment menjadi confirm karena SO sudah jalan
         appointment.sudo().write({'state': 'confirm'})
 
-        # 8. LEMPAR KE PORTAL INVOICE (Bukan Quotation)
+        # LEMPAR KE PORTAL INVOICE 
         # Mengarahkan user ke halaman tagihan spesifik
         portal_url = invoice.get_portal_url()
         return request.redirect(portal_url)
